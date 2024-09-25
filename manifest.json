@@ -1,0 +1,10 @@
+{
+  "manifest_version": 3,
+  "name": "requisitions-extractor-extension",
+  "description": "A simples extension that extract all page network requisitions and parse it like you want",
+  "version": "1.0",
+  "action": {
+    "default_popup": "popup/popup.html"
+  },
+  "devtools_page": "devtools.html"
+}
