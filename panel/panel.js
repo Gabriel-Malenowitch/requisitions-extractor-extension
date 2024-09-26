@@ -4,6 +4,8 @@ const { div, main, h2, button, p, textarea, br, un, li, code } = Van.tags
 const VARS = [
   'method',
   'url',
+  'undecodedUrl',
+  'urlWithoutQueryParams',
   'httpVersion',
   'headers',
   'queryString',
@@ -11,6 +13,7 @@ const VARS = [
   'headersSize',
   'bodySize',
   'body',
+  'response'
 ]
 
 const build_var_name = (value) => `\$\{${value}\}`
@@ -19,7 +22,8 @@ const DEFAULT_TEMPLATE = `
 {
   "method": "${build_var_name('method')}",
   "url": "${build_var_name('url')}",
-  "query_string": "${build_var_name('queryString')}",
+  "query_params": "${build_var_name('queryString')}",
+  "response": "${build_var_name('response')}"
 }
 `
 
@@ -39,32 +43,49 @@ const Content = () => {
   const reqList = Van.state([])
   
   chrome.devtools.network.onRequestFinished.addListener((request) => {
-    request.getContent(value => {
+    if(request.request.method !== "OPTIONS"){
+      request.getContent(value => {
         reqList.rawVal.push({
           ...request?.request,
-          response: value
+          urlWithoutQueryParams: request?.request?.url?.substring(0, /\?/.exec(request?.request?.url)?.index),
+          undecodedUrl: request?.request?.url,
+          response: JSON.parse(JSON.stringify(value))
         })
       })
+    }
   });
 
   const handleSubmit = () => {
-    console.log(reqList)
+    const parseQueryParams = (input) => {
+      const result = {}
+      input.forEach(item => {
+        if (item.value.includes("%")) {
+          result[item.name] = JSON.parse(decodeURIComponent(item.value))
+        } else {
+          result[item.name] = item.value
+        }
+      })
+
+      return result
+    };
+
     reqList.rawVal.forEach(req => {
-      const fileName = req.url?.substring(0, /\?/.exec(req.url)?.index)
       const text = document.getElementById("textarea").value
       
       const content = text.replace(/\$\{(\w+)\}/g, (_, varName) => {
-        const objectResult = String(req[varName]).startsWith("\"\"") ? String(req[varName]) : JSON.stringify(req[varName])
-        const parsedResult = String(objectResult).includes("%") ? decodeURIComponent(objectResult) : objectResult  
-        return parsedResult || ""
+        if(varName === 'url'){
+          return decodeURIComponent(req[varName])
+        }
+
+        if(varName === 'queryString'){
+            console.log(req[varName])
+           return JSON.stringify(parseQueryParams(req[varName]))
+        }
+        
+        return req[varName] || ""
       })
 
-downloadJSON(`
-{
-  requisition: ${content},
-  response: ${JSON.stringify(JSON.parse(req.response))}
-}
-`, fileName)
+      downloadJSON(content, req.urlWithoutQueryParams)
     })
   }
 
